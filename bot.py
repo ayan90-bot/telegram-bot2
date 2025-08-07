@@ -1,71 +1,66 @@
-import json
 import os
+import json
 from datetime import datetime
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from keep_alive import keep_alive
+from keep_alive import keep_alive  # Optional for Render
 
+# Load token
+load_dotenv()
+BOT_TOKEN = os.getenv("8383085554:AAECplHV2Qqj8aGlnjk7Bw3FAAsOrMMvXfg")
 DATA_FILE = "data.json"
-BOT_TOKEN = "8383085554:AAECplHV2Qqj8aGlnjk7Bw3FAAsOrMMvXfg"
 
+# Load user data
 def load_data():
-    if not os.path.exists(DATA_FILE):
+    try:
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    except:
         return {}
-    with open(DATA_FILE, 'r') as f:
-        return json.load(f)
 
+# Save user data
 def save_data(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f)
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-def get_today():
-    return datetime.now().strftime("%Y-%m-%d")
-
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Welcome to NoFap Tracker!\nUse /streak to check your progress.")
+    await update.message.reply_text("👋 Welcome to the NoFap bot!\nUse /master to see your streak.\nUse /streak to check days.\nUse /reset to restart.")
 
-async def streak(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    data = load_data()
-    today = get_today()
-
-    if user_id not in data:
-        data[user_id] = {"last_reset": today, "streak": 0}
-    else:
-        last = datetime.strptime(data[user_id]["last_reset"], "%Y-%m-%d")
-        days = (datetime.now() - last).days
-        data[user_id]["streak"] = days
-
-    save_data(data)
-    await update.message.reply_text(f"🔥 Your current streak is: {data[user_id]['streak']} days")
-
+# Reset streak
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     data = load_data()
-    today = get_today()
-
-    data[user_id] = {"last_reset": today, "streak": 0}
+    data[user_id] = str(datetime.utcnow())
     save_data(data)
-    await update.message.reply_text("💀 Streak reset. Start fresh from today!")
+    await update.message.reply_text("🔄 Your streak has been reset!")
 
-async def master(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Show streak
+async def streak(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
     data = load_data()
-    leaderboard = sorted(data.items(), key=lambda x: x[1].get("streak", 0), reverse=True)
-    top10 = leaderboard[:10]
+    if user_id not in data:
+        await update.message.reply_text("❌ No streak found. Use /reset to start.")
+        return
+    last_reset = datetime.strptime(data[user_id], "%Y-%m-%d %H:%M:%S.%f")
+    days = (datetime.utcnow() - last_reset).days
+    await update.message.reply_text(f"🔥 You are {days} days clean!")
 
-    msg = "🏆 Top Streaks:\n"
-    for i, (uid, info) in enumerate(top10, 1):
-        msg += f"{i}. {uid}: {info['streak']} days\n"
+# Master command
+async def master(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await streak(update, context)
 
-    await update.message.reply_text(msg)
+# Bot setup
+def main():
+    keep_alive()  # optional for uptime
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))
+    app.add_handler(CommandHandler("streak", streak))
+    app.add_handler(CommandHandler("master", master))
+    print("🚀 NoFap Bot Running...")
+    app.run_polling()
 
-# Keep alive and run bot
-keep_alive()
-
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("streak", streak))
-app.add_handler(CommandHandler("reset", reset))
-app.add_handler(CommandHandler("master", master))
-
-app.run_polling()
+if __name__ == "__main__":
+    main()
